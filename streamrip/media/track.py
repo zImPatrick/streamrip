@@ -31,6 +31,8 @@ class Track(Media):
     download_path: str = ""
     is_single: bool = False
 
+    download_failed: bool = False
+
     async def preprocess(self):
         self._set_download_path()
         os.makedirs(self.folder, exist_ok=True)
@@ -68,6 +70,7 @@ class Track(Media):
                     logger.error(
                         f"Persistent error downloading track '{self.meta.title}', skipping: {e}"
                     )
+                    self.download_failed = True
                     self.db.set_failed(
                         self.downloadable.source, "track", self.meta.info.id
                     )
@@ -75,6 +78,10 @@ class Track(Media):
     async def postprocess(self):
         if self.is_single:
             remove_title(self.meta.title)
+
+        if self.download_failed:
+            logger.error(f"Cannot tag track '{self.meta.title}' as it failed downloading")
+            return
 
         await tag_file(self.download_path, self.meta, self.cover_path)
         if self.config.session.conversion.enabled:

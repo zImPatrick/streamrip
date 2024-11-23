@@ -72,10 +72,10 @@ class DeezerClient(Client):
 
         album_id = item["album"]["id"]
         try:
-            album_metadata, album_tracks = await asyncio.gather(
-                asyncio.to_thread(self.client.api.get_album, album_id),
-                asyncio.to_thread(self.client.api.get_album_tracks, album_id),
-            )
+            album_metadata = await asyncio.to_thread(self.client.api.get_album, album_id)
+            album_id = album_metadata['id']
+            album_tracks = await asyncio.to_thread(self.client.api.get_album_tracks, album_id)
+
         except Exception as e:
             logger.error(f"Error fetching album of track {item_id}: {e}")
             return item
@@ -148,7 +148,11 @@ class DeezerClient(Client):
 
         track_info = self.client.gw.get_track(item_id)
 
+        # prefer fallback
         fallback_id = track_info.get("FALLBACK", {}).get("SNG_ID")
+        if fallback_id != None:
+            track_info = track_info["FALLBACK"]
+            dl_info["id"] = fallback_id
 
         quality_map = [
             (9, "MP3_128"),  # quality 0
@@ -180,6 +184,7 @@ class DeezerClient(Client):
             )
 
         if url is None:
+            logger.warning("Getting fallback url for track '%s'", track_info["SNG_TITLE"])
             url = self._get_encrypted_file_url(
                 item_id,
                 track_info["MD5_ORIGIN"],
